@@ -468,12 +468,12 @@
         '<p class="hint">La duración del vuelo se calcula con las horas capturadas (horas locales; si la llegada es menor que la salida se toma como día siguiente).</p>';
     } else if (d.kind === 'traslado') {
       function seg(attr, cur, opts) { return '<div class="seg">' + opts.map(function (o) { return '<button type="button" class="btn small" ' + attr + '="' + o[0] + '" aria-pressed="' + (cur === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</div>'; }
-      h += '<div class="lbl">Ubicación del punto de partida</div>' + seg('data-admodeo', d.omode, [['auto', 'Lugar anterior'], ['mapa', 'Punto de Google Maps'], ['unidad', 'Unidad operativa del OOAD']]);
+      h += '<div class="lbl lblc">Ubicación del punto de partida</div>' + seg('data-admodeo', d.omode, [['auto', 'Lugar anterior'], ['mapa', 'Punto de Google Maps'], ['unidad', 'Unidad operativa del OOAD']]);
       if (d.omode === 'auto') h += '<p class="hint">Sale del lugar de la actividad anterior (o del punto de partida del día).</p>';
       else if (d.omode === 'mapa') h += '<div class="f"><label>Nombre del origen</label><input type="text" data-ad="nameO" value="' + esc(d.nameO) + '" placeholder="Ej. Hotel, aeropuerto, oficinas del OOAD"></div>' + adPicker(d, 'Ubicación del origen', 'O');
       else h += unitPicker(d, 'O');
       h += '<div class="f-row" style="margin-top:8px"><div class="f"><label>Hora de salida <small>(opcional)</small></label><input type="time" data-ad="thora" value="' + esc(d.thora) + '"></div><p class="hint" style="align-self:end;margin:0">Si la dejas vacía, sale al terminar la actividad anterior.</p></div>';
-      h += '<div class="lbl" style="margin-top:14px">Destino del traslado</div>' + seg('data-admode', d.mode, [['mapa', 'Punto de Google Maps'], ['unidad', 'Unidad operativa del OOAD']]);
+      h += '<div class="lbl lblc" style="margin-top:14px">Destino del traslado</div>' + seg('data-admode', d.mode, [['mapa', 'Punto de Google Maps'], ['unidad', 'Unidad operativa del OOAD']]);
       h += d.mode === 'mapa' ? '<div class="f"><label>Nombre del destino</label><input type="text" data-ad="name" value="' + esc(d.name) + '" placeholder="Ej. Hotel, aeropuerto, oficinas del OOAD"></div>' + adPicker(d, 'Ubicación del destino') : unitPicker(d);
     } else if (d.kind === 'checkin') {
       h += '<div class="f-row"><div class="f"><label>Hotel</label><input type="text" data-ad="name" value="' + esc(d.name) + '"></div>' + durField(d) + '</div>' + adPicker(d, 'Ubicación del hotel');
