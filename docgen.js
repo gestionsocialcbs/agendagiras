@@ -275,7 +275,7 @@
   function ooadName(state) { return state.ooadName || ''; }
   // OOAD de la visita: el principal y los que aparezcan en participantes o unidades
   function ooadList(state) {
-    var list = [{ id: state.ooadId, name: state.ooadName || '' }], seen = {}; seen[state.ooadId] = 1;
+    var list = state.ooadId ? [{ id: state.ooadId, name: state.ooadName || '' }] : [], seen = {}; if (state.ooadId) seen[state.ooadId] = 1;
     function add(id, n) { if (id == null || !n || seen[id]) return; seen[id] = 1; list.push({ id: id, name: n }); }
     (state.people || []).forEach(function (p) { if (p.on && p.grupo === 'OOAD' && (p.nombre || p.sig)) add(p.ooadId, p.ooadName); });
     (state.days || []).forEach(function (d) { d.items.forEach(function (it) { if (it.kind === 'recorrido') add(it.ooadId, it.ooadName); }); });
@@ -283,6 +283,7 @@
   }
   function ooadTitle(state) {
     var n = ooadList(state).map(function (o) { return o.name; });
+    if (!n.length) return 'al OOAD';
     if (n.length < 2) return 'al OOAD ' + n[0];
     return 'a los OOAD ' + n.slice(0, -1).join(', ') + ' y ' + n[n.length - 1];
   }

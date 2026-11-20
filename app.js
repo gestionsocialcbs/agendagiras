@@ -44,13 +44,13 @@
     return dpesPreset().map(function (p) { return { id: nid('p'), grupo: 'DPES', on: p.on, sig: p.sig, nombre: p.nombre, cargo: p.cargo }; });
   }
   function ooadPeople(id) {
-    var rows = (CAT.dir[String(id)] || []);
+    var rows = id ? (CAT.dir[String(id)] || []) : [];
     return rows.map(function (r) {
       var cargo = r.c === 'Titular del OOAD' ? 'Titular del Órgano de Operación Administrativa Desconcentrada' : r.c;
       return { id: nid('p'), grupo: 'OOAD', on: true, sig: DG.initials(r.n), nombre: r.n, cargo: cargo, tag: /^Encargad/.test(r.t || '') ? r.t : '' };
     });
   }
-  function defaultObjetivo(name) { return 'Realizar recorridos por las Unidades de Prestaciones Sociales adscritas al Órgano de Operación Administrativa Desconcentrada de ' + name + '.'; }
+  function defaultObjetivo(name) { if (!name) return ''; return 'Realizar recorridos por las Unidades de Prestaciones Sociales adscritas al Órgano de Operación Administrativa Desconcentrada de ' + name + '.'; }
 
   function exampleState() {
     var id = 6, name = ooadById(id).n, d1 = DG.addDays(todayISO(), 14), d2 = DG.addDays(d1, 1);
@@ -77,20 +77,18 @@
       ]
     };
   }
-  function blankState(prev) {
+  function emptyState(prev) {
     var s = exampleState();
-    s.example = false;
-    s.days = [];
-    if (prev) { s.para = prev.para; s.de = prev.de; s.opts = prev.opts; s.people = prev.people.filter(function (p) { return p.grupo !== 'UNIDAD'; }); s.ooadId = prev.ooadId; s.ooadName = prev.ooadName; s.objetivo = defaultObjetivo(prev.ooadName); }
+    s.example = false; s.days = []; s.people = []; s.fecha = '';
+    s.ooadId = 0; s.ooadName = ''; s.objetivo = ''; s.objetivoEdited = false; s.antecedente = '';
+    if (prev) { s.para = prev.para; s.de = prev.de; s.opts = prev.opts; }
     return s;
   }
+  var blankState = emptyState;
   function save() {
-    try { var c = JSON.parse(JSON.stringify(S)); localStorage.setItem(KEY, JSON.stringify(c)); } catch (e) { /* sin almacenamiento */ }
+    /* sin persistencia: cada ingreso inicia con la ficha vacía */
   }
-  function load() {
-    try { var r = localStorage.getItem(KEY); if (!r) return null; var s = JSON.parse(r); if (s && s.days && s.people && s.ooadId) return s; } catch (e) { /* ignorar */ }
-    return null;
-  }
+  function load() { try { localStorage.removeItem(KEY); } catch (e) { /* ignorar */ } return null; }
 
   /* ---------- utilidades de interfaz ---------- */
   function keepFocus(fn) {
@@ -166,7 +164,7 @@
   }
   function bindGeneral() {
     var sel = $('#ooad');
-    sel.innerHTML = CAT.ooads.map(function (o) { return '<option value="' + o.id + '">' + esc(o.n) + '</option>'; }).join('');
+    sel.innerHTML = '<option value="0">— Selecciona el OOAD —</option>' + CAT.ooads.map(function (o) { return '<option value="' + o.id + '">' + esc(o.n) + '</option>'; }).join('');
     function bind(id, fn) { $(id).addEventListener('input', function (e) { fn(e.target.value); update({ people: false }); }); }
     bind('#fecha', function (v) { S.fecha = v; });
     bind('#paraN', function (v) { S.para.nombre = v; }); bind('#paraC', function (v) { S.para.cargo = v; });
@@ -177,7 +175,7 @@
     sel.addEventListener('change', function () { setOoad(+sel.value); });
   }
   function setOoad(id) {
-    var o = ooadById(id), old = S.ooadId; S.ooadId = id; S.ooadName = o.n;
+    var o = ooadById(id) || { n: '' }, old = S.ooadId; S.ooadId = id; S.ooadName = o.n;
     S.people = S.people.filter(function (p) { return !(p.grupo === 'OOAD' && p.key && (p.ooadId == null || p.ooadId === old)) && p.grupo !== 'UNIDAD'; });
     UI.pOoad = id; UI.unitOoad = id; UI.draft = null;
     if (!S.objetivoEdited) { S.objetivo = defaultObjetivo(o.n); $('#obj').value = S.objetivo; }
@@ -191,8 +189,8 @@
   function candidates() {
     var added = {}; S.people.forEach(function (p) { if (p.key) added[p.key] = 1; });
     var d = (CAT.dpes || []).slice().sort(function (x, y) { return (x.num || 0) - (y.num || 0); }).map(function (r) { return { key: 'D:' + r.s, grupo: 'DPES', sig: r.s, nombre: r.n, cargo: cargoDpes(r) }; });
-    if (UI.pOoad == null || !ooadById(UI.pOoad)) UI.pOoad = S.ooadId;
-    var po = UI.pOoad, pn = ooadById(po).n;
+    if (UI.pOoad == null || (UI.pOoad && !ooadById(UI.pOoad))) UI.pOoad = S.ooadId;
+    var po = UI.pOoad, pn = po && ooadById(po) ? ooadById(po).n : '';
     var o = ooadPeople(po).map(function (p) { return { key: 'O:' + po + ':' + p.nombre, grupo: 'OOAD', ooadId: po, ooadName: pn, sig: p.sig, nombre: p.nombre, cargo: p.cargo, tag: p.tag }; });
     var f = function (c) { return !added[c.key]; };
     return { dpes: d.filter(f), ooad: o.filter(f) };
@@ -202,7 +200,7 @@
     var groups = [['DPES', 'DPES', S.people.filter(function (p) { return p.grupo === 'DPES'; })]];
     var og = {}, ordIds = [S.ooadId];
     S.people.forEach(function (p) { if (p.grupo === 'DPES') return; var id = p.ooadId != null ? p.ooadId : S.ooadId; (og[id] = og[id] || []).push(p); if (ordIds.indexOf(id) < 0) ordIds.push(id); });
-    ordIds.forEach(function (id) { if (og[id]) groups.push(['O', 'OOAD ' + (id === S.ooadId ? S.ooadName : ooadById(id).n), og[id]]); });
+    ordIds.forEach(function (id) { if (og[id]) groups.push(['O', 'OOAD ' + (id === S.ooadId ? S.ooadName : (ooadById(id) || { n: '' }).n), og[id]]); });
     var html = '', htmlD = '';
     groups.forEach(function (g) {
       var ps = g[2];
@@ -222,7 +220,7 @@
     });
     $('#peopleD').innerHTML = htmlD; $('#people').innerHTML = html;
     if (!htmlD && !html) $('#peopleD').innerHTML = '<div class="empty">Aún no hay participantes. Elige uno de la lista y pulsa Agregar.</div>';
-    var po = $('#pOoad'); if (!po.options.length) po.innerHTML = CAT.ooads.map(function (o) { return '<option value="' + o.id + '">' + esc(o.n) + '</option>'; }).join('');
+    var po = $('#pOoad'); if (!po.options.length) po.innerHTML = '<option value="0">— Selecciona el OOAD —</option>' + CAT.ooads.map(function (o) { return '<option value="' + o.id + '">' + esc(o.n) + '</option>'; }).join('');
     var c = candidates(); po.value = String(UI.pOoad); CAND = {}; c.dpes.concat(c.ooad).forEach(function (x) { CAND[x.key] = x; });
     function opts(list) { return list.map(function (x) { return '<option value="' + esc(x.key) + '">' + esc(x.nombre) + '</option>'; }).join(''); }
     function fill(sel, html) { var prev = sel.value; sel.innerHTML = html; if (prev && sel.querySelector('option[value="' + prev.replace(/"/g, '\\"') + '"]')) sel.value = prev; }
@@ -251,7 +249,8 @@
     function addPerson(k, grp) {
       if (!k) return;
       var np;
-      if (k === 'manual') np = grp === 'DPES' ? { id: nid('p'), grupo: 'DPES', on: true, sig: '', nombre: '', cargo: '' } : { id: nid('p'), grupo: 'OOAD', ooadId: UI.pOoad, ooadName: ooadById(UI.pOoad).n, on: true, sig: '', nombre: '', cargo: '' };
+      if (k === 'manual' && grp !== 'DPES' && !UI.pOoad) { toast('Primero selecciona el OOAD del personal.'); return; }
+      if (k === 'manual') np = grp === 'DPES' ? { id: nid('p'), grupo: 'DPES', on: true, sig: '', nombre: '', cargo: '' } : { id: nid('p'), grupo: 'OOAD', ooadId: UI.pOoad, ooadName: (ooadById(UI.pOoad) || { n: '' }).n, on: true, sig: '', nombre: '', cargo: '' };
       else { var c = CAND[k]; if (!c) return; np = { id: nid('p'), grupo: c.grupo, ooadId: c.ooadId, ooadName: c.ooadName, on: true, key: c.key, sig: c.sig, nombre: c.nombre, cargo: c.cargo, tag: c.tag || '' }; }
       S.people.push(np); update({});
       if (k === 'manual') { var n = $('[data-fk="nom-' + np.id + '"]'); if (n) n.focus(); }
@@ -260,9 +259,9 @@
   }
 
   /* ---------- sección 3: días ---------- */
-  function nextDate() { var l = S.days[S.days.length - 1]; return l ? DG.addDays(l.date, 1) : DG.addDays(todayISO(), 14); }
+  function nextDate() { var l = S.days[S.days.length - 1]; return l ? DG.addDays(l.date, 1) : ''; }
   function renderDays() {
-    var f = $('#dayDate'); if (!f.value) f.value = nextDate();
+    var f = $('#dayDate'); if (!f.value && S.days.length) f.value = nextDate();
     $('#dayCount').textContent = S.days.length ? S.days.length + (S.days.length === 1 ? ' día' : ' días') : '';
     $('#dayList').innerHTML = S.days.length ? S.days.map(function (d, i) {
       var n = d.items.length;
@@ -418,11 +417,11 @@
   function newDraft(k) {
     var oo = UI.unitOoad != null ? UI.unitOoad : S.ooadId;
     switch (k) {
-      case 'vuelo': return { kind: k, name: 'AICM', raw: '', tsal: '', name2: '', raw2: '', tlle: '' };
+      case 'vuelo': return { kind: k, name: '', raw: '', tsal: '', name2: '', raw2: '', tlle: '' };
       case 'traslado': return { kind: k, thora: '', omode: 'auto', nameO: '', rawO: '', ooadO: oo, unitO: null, mode: 'mapa', name: '', raw: '', ooad: oo, unit: null };
       case 'comida': return { kind: k, dur: '90' };
       case 'cierre': return { kind: k, dur: '30' };
-      case 'checkin': return { kind: k, name: 'Hotel en ' + lastOoadName(), raw: '', dur: '0' };
+      case 'checkin': return { kind: k, name: '', raw: '', dur: '0' };
       case 'libre': return { kind: k, text: 'Actividad', dur: '30' };
       default: return { kind: 'recorrido', ooad: oo, unit: null, dur: '60' };
     }
@@ -522,7 +521,7 @@
         else if (d.omode === 'mapa') { if (!d.nameO.trim()) { toast('Escribe el nombre del origen.'); return; } it.origin = placeFrom(d.nameO, d.rawO); }
         msg = 'traslado' + (it.origin ? ' de ' + it.origin.name : '') + ' a ' + it.place.name;
       } else if (d.kind === 'checkin') {
-        it.dur = Math.max(0, +d.dur || 0); it.place = placeFrom(d.name || 'Hotel en ' + S.ooadName, d.raw); msg = 'check-in';
+        it.dur = Math.max(0, +d.dur || 0); it.place = placeFrom(d.name || ('Hotel' + (S.ooadName ? ' en ' + S.ooadName : '')), d.raw); msg = 'check-in';
       } else if (d.kind === 'libre') {
         it.dur = Math.max(0, +d.dur || 0); it.text = d.text.trim() || 'Actividad'; msg = it.text;
       } else { it.dur = Math.max(0, +d.dur || 0); msg = d.kind === 'comida' ? 'comida' : 'reunión de cierre'; }
@@ -642,7 +641,7 @@
   var CLEAR_MSG = { 1: 'Datos generales limpiados.', 2: 'Participantes quitados.', 3: 'Días quitados.', 4: 'Itinerario limpiado.', 5: 'Mapa restablecido al esquema.' };
   function clearSection(n) {
     var snap = JSON.parse(JSON.stringify(S)), prevImg = UI.mapImg, prevDay = UI.day;
-    if (n === 1) { S.fecha = todayISO(); S.para = { nombre: '', cargo: '' }; S.de = { nombre: '', cargo: '' }; S.objetivo = ''; S.objetivoEdited = true; S.antecedente = ''; }
+    if (n === 1) { S.fecha = ''; S.para = { nombre: '', cargo: '' }; S.de = { nombre: '', cargo: '' }; S.objetivo = ''; S.objetivoEdited = true; S.antecedente = ''; }
     else if (n === 2) { S.people = []; }
     else if (n === 3) { S.days = []; UI.day = 0; $('#dayDate').value = ''; }
     else if (n === 4) { S.days.forEach(function (d) { d.items = []; d.startPlace = { name: '' }; }); S.people = S.people.filter(function (p) { return p.grupo !== 'UNIDAD'; }); UI.day = 0; }
@@ -656,8 +655,8 @@
     $('#editor').addEventListener('click', function (e) { var b = e.target.closest('[data-clear]'); if (b) clearSection(+b.dataset.clear); });
     $('#btnDl').addEventListener('click', download);
     $('#btnNew').addEventListener('click', function () {
-      S = blankState(S); UI.day = 0; UI.mapImg = UI.mapGen = null; UI.openParts = UI.openPlace = null; fillGeneral(); update({ all: true });
-      toast('Ficha nueva. Se conservaron participantes y datos del oficio.');
+      S = emptyState(S); UI.day = 0; UI.pOoad = UI.unitOoad = 0; $('#dayDate').value = ''; UI.mapImg = UI.mapGen = null; UI.openParts = UI.openPlace = null; fillGeneral(); update({ all: true });
+      toast('Ficha nueva, sin datos.');
     });
     function loadMapFile(f, fromGen) {
       if (!fromGen) UI.mapGen = null;
@@ -847,13 +846,11 @@
   function init() {
     Promise.all([fetch('data/catalogo.json').then(function (r) { return r.json(); }), fetch('data/plantilla.json').then(function (r) { return r.json(); })]).then(function (r) {
       CAT = r[0]; TPL = r[1].b64;
-      S = load() || exampleState();
+      load(); S = emptyState();
       if (S.dpesV !== 3) { S.people = []; S.dpesV = 3; }
-      if (!ooadById(S.ooadId)) S = exampleState();
-      S.opts = S.opts || { kmh: 55, circuity: 1.3, buffer: 0, gap: 1 };
+            S.opts = S.opts || { kmh: 55, circuity: 1.3, buffer: 0, gap: 1 };
       bindGeneral(); fillGeneral(); bindPeople(); bindSchedule(); bindAddForm(); bindDays(); bindMisc();
       update({ all: true });
-      if (S.example) toast('Ejemplo precargado con Colima. Edítalo o pulsa Nueva ficha.');
     }).catch(function (e) { document.body.insertAdjacentHTML('afterbegin', '<p class="err" style="padding:20px">No se pudieron cargar los datos del catálogo: ' + esc(e.message) + '</p>'); });
   }
   init();
