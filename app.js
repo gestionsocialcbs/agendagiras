@@ -226,7 +226,7 @@
     var c = candidates(); po.value = String(UI.pOoad); CAND = {}; c.dpes.concat(c.ooad).forEach(function (x) { CAND[x.key] = x; });
     function opts(list) { return list.map(function (x) { return '<option value="' + esc(x.key) + '">' + esc(x.nombre) + '</option>'; }).join(''); }
     function fill(sel, html) { var prev = sel.value; sel.innerHTML = html; if (prev && sel.querySelector('option[value="' + prev.replace(/"/g, '\\"') + '"]')) sel.value = prev; }
-    fill($('#pSel'), c.dpes.length ? opts(c.dpes) : '<option value="">Todos agregados</option>');
+    fill($('#pSel'), opts(c.dpes) + '<option value="manual">Otra persona (captura manual)</option>');
     fill($('#pSelO'), opts(c.ooad) + '<option value="manual">Otra persona (captura manual)</option>');
   }
   function bindPeople() {
@@ -246,12 +246,12 @@
       update({});
     });
     $('#pOoad').addEventListener('change', function (e) { UI.pOoad = +e.target.value; renderPeople(); });
-    $('#pAdd').addEventListener('click', function () { addPerson($('#pSel').value); });
-    $('#pAddO').addEventListener('click', function () { addPerson($('#pSelO').value); });
-    function addPerson(k) {
+    $('#pAdd').addEventListener('click', function () { addPerson($('#pSel').value, 'DPES'); });
+    $('#pAddO').addEventListener('click', function () { addPerson($('#pSelO').value, 'OOAD'); });
+    function addPerson(k, grp) {
       if (!k) return;
       var np;
-      if (k === 'manual') np = { id: nid('p'), grupo: 'OOAD', ooadId: UI.pOoad, ooadName: ooadById(UI.pOoad).n, on: true, sig: '', nombre: '', cargo: '' };
+      if (k === 'manual') np = grp === 'DPES' ? { id: nid('p'), grupo: 'DPES', on: true, sig: '', nombre: '', cargo: '' } : { id: nid('p'), grupo: 'OOAD', ooadId: UI.pOoad, ooadName: ooadById(UI.pOoad).n, on: true, sig: '', nombre: '', cargo: '' };
       else { var c = CAND[k]; if (!c) return; np = { id: nid('p'), grupo: c.grupo, ooadId: c.ooadId, ooadName: c.ooadName, on: true, key: c.key, sig: c.sig, nombre: c.nombre, cargo: c.cargo, tag: c.tag || '' }; }
       S.people.push(np); update({});
       if (k === 'manual') { var n = $('[data-fk="nom-' + np.id + '"]'); if (n) n.focus(); }
