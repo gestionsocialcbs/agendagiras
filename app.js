@@ -840,12 +840,35 @@
       z = Math.max(3, Math.min(15, Math.floor(z * 10) / 10));
       return { center: { longitude: (x0 + x1) / 2, latitude: (y0 + y1) / 2 }, zoom: z };
     }
+    /* ---- Mapbox: conector de Claude (artefacto) o API directa con token público (sitio propio) ---- */
+    async function getBackend() {
+      var mcp = null; try { mcp = (window.claude && window.claude.use) ? await window.claude.use('mcp') : null; } catch (e) { mcp = null; }
+      if (mcp) return { call: function (t, a) { return mcp.callTool('Mapbox', t, a); } };
+      var tk = window.MAPBOX_TOKEN; if (!tk) return null;
+      return { call: async function (t, a) {
+        var base = 'https://api.mapbox.com';
+        if (t === 'directions_tool') {
+          var cs = a.coordinates.map(function (c) { return c.longitude + ',' + c.latitude; }).join(';');
+          var r = await fetch(base + '/directions/v5/' + (a.routing_profile || 'mapbox/driving') + '/' + cs + '?geometries=geojson&overview=simplified&access_token=' + tk);
+          var js = await r.json(); if (!r.ok || !js.routes) { var er = new Error(js.message || 'Error de Mapbox'); er.code = 'http_' + r.status; throw er; }
+          return { payload: { routes: js.routes } };
+        }
+        var ov = a.overlays.map(function (o) {
+          if (o.type === 'path') return 'path-' + o.strokeWidth + '+' + o.strokeColor + '-' + o.strokeOpacity + '(' + encodeURIComponent(o.encodedPolyline) + ')';
+          return 'pin-l-' + o.label + '+' + o.color + '(' + o.longitude + ',' + o.latitude + ')';
+        }).join(',');
+        var url = base + '/styles/v1/' + a.style + '/static/' + ov + '/' + a.center.longitude.toFixed(5) + ',' + a.center.latitude.toFixed(5) + ',' + a.zoom + '/' + a.size.width + 'x' + a.size.height + '?access_token=' + tk;
+        var rs = await fetch(url); if (!rs.ok) { var e2 = new Error('Mapbox respondió ' + rs.status); e2.code = 'http_' + rs.status; throw e2; }
+        var blob = await rs.blob(), b64 = await new Promise(function (res) { var fr = new FileReader(); fr.onload = function () { res(String(fr.result).split(',')[1]); }; fr.readAsDataURL(blob); });
+        return { content: [{ type: 'image', data: b64, mimeType: blob.type || 'image/png' }] };
+      } };
+    }
     async function renderGen(msg) {
       var g = UI.mapGen; if (!g) return;
-      var mcp = null; try { mcp = await window.claude.use('mcp'); } catch (e) { mcp = null; }
-      if (!mcp) { msg.style.color = '#9B2247'; msg.textContent = 'Esta vista no puede usar el conector de Mapbox.'; return; }
+      var be = await getBackend();
+      if (!be) { msg.style.color = '#9B2247'; msg.textContent = 'No hay conexión con Mapbox (falta el conector o el token en config.js).'; return; }
       msg.style.color = ''; msg.textContent = 'Generando imagen…';
-      var img = await mcp.callTool('Mapbox', 'static_map_image_tool', { center: g.view.center, zoom: g.view.zoom, size: { width: 1280, height: 800 }, style: 'mapbox/streets-v12', overlays: g.overlays });
+      var img = await be.call('static_map_image_tool', { center: g.view.center, zoom: g.view.zoom, size: { width: 1280, height: 800 }, style: 'mapbox/streets-v12', overlays: g.overlays });
       var found = findImage(img && (img.payload || img), 0) || findImage(img, 0);
       if (!found) throw new Error('El conector no devolvió una imagen');
       loadMapFile(b64File(found), true); msg.textContent = '';
@@ -911,11 +934,11 @@
     $('#mapGen').addEventListener('click', async function () {
       var msg = $('#mapGenMsg'), btn = this, days = SCHED.days.filter(function (d) { return d.points.filter(DG.hasCoords).length > 1; });
       if (!days.length) { msg.textContent = 'Agrega al menos dos lugares con coordenadas.'; return; }
-      var mcp = null; try { mcp = (window.claude && window.claude.use) ? await window.claude.use('mcp') : null; } catch (e) { mcp = null; }
-      if (!mcp) { msg.style.color = '#9B2247'; msg.textContent = 'Esta vista no puede usar el conector de Mapbox. Pega una captura de Google Maps.'; return; }
+      var be = await getBackend();
+      if (!be) { msg.style.color = '#9B2247'; msg.textContent = 'No hay conexión con Mapbox (falta el conector o el token en config.js). Pega una captura de Google Maps.'; return; }
       btn.disabled = true; msg.style.color = ''; msg.textContent = 'Calculando rutas…';
       try {
-        var srv = { call: function (t, a) { return mcp.callTool('Mapbox', t, a); } }, overlays = [], all = [], n = 0, seen = {};
+        var srv = be, overlays = [], all = [], n = 0, seen = {};
         for (var di = 0; di < days.length; di++) {
           var d = days[di], pts = d.points.filter(DG.hasCoords), col = d.color.toLowerCase();
           var r = await srv.call('directions_tool', { coordinates: pts.map(function (p) { return { longitude: p.lng, latitude: p.lat }; }), routing_profile: 'mapbox/driving', geometries: 'geojson', overview: 'simplified' });

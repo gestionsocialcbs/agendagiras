@@ -15,6 +15,7 @@ Herramienta web para elaborar la **Agenda de visita de acompañamiento** (agenda
 - `app.js`: lógica de la interfaz, mapa y exportación.
 - `docgen.js`: cálculo de la agenda y generación del .docx (JSZip).
 - `data/`: catálogo de unidades y OOAD, plantilla Word (base64) y contornos de estados.
+- `config.example.js`: plantilla del token público de Mapbox; copiarla como `config.js` (no se sube al repositorio).
 - `leaflet.css`: estilos de Leaflet (el mapa interactivo vectorial ya no se usa en pantalla).
 
 ## Uso
