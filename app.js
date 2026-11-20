@@ -6,7 +6,7 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   var KEY = 'giras.v1';
   var CAT = null, TPL = null, S = null, SCHED = null;
-  var UI = { pOoad: null, unitOoad: null, day: 0, openParts: null, openPlace: null, q: '', types: {}, all: false, mapImg: null, mapBlob: null, mapGen: null };
+  var UI = { pOoad: null, unitOoad: null, day: 0, openParts: null, openPlace: null, q: '', types: {}, all: false, mapImg: null, mapGen: null };
   var uidn = 0;
   function nid(p) { uidn++; return (p || 'i') + Date.now().toString(36) + uidn; }
   var TYPE_SHORT = { 'Centro de Seguridad Social': 'CSS', 'Teatro Cubierto': 'Teatro', 'Unidad Deportiva': 'UD', 'Tienda': 'Tienda', 'Velatorio': 'Velatorio',
@@ -535,130 +535,6 @@
   }
 
   /* ---------- mapa ---------- */
-  var MEX = null;
-  function drawSchematic(canvas, sched, W, H) {
-    var ctx = canvas.getContext('2d'); canvas.width = W; canvas.height = H;
-    ctx.fillStyle = '#EEF2EF'; ctx.fillRect(0, 0, W, H);
-    var pts = []; sched.days.forEach(function (d) { d.points.forEach(function (p) { pts.push(p); }); });
-    if (pts.length < 2) { ctx.fillStyle = '#5F6D69'; ctx.font = '600 ' + Math.round(W / 55) + 'px "Noto Sans", sans-serif'; ctx.textAlign = 'center'; ctx.fillText('Agrega al menos dos lugares con coordenadas para ver el esquema', W / 2, H / 2); return false; }
-    var lat0 = pts.reduce(function (a, p) { return a + p.lat; }, 0) / pts.length, kx = Math.cos(lat0 * Math.PI / 180);
-    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    pts.forEach(function (p) { var x = p.lng * kx, y = -p.lat; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); });
-    var padX = W * 0.16, padY = H * 0.16, bw = Math.max(maxX - minX, 0.02), bh = Math.max(maxY - minY, 0.02);
-    var sc = Math.min((W - 2 * padX) / bw, (H - 2 * padY) / bh);
-    var ox = (W - bw * sc) / 2, oy = (H - bh * sc) / 2;
-    function P(p) { return { x: ox + (p.lng * kx - minX) * sc, y: oy + (-p.lat - minY) * sc }; }
-    // estados de México de fondo
-    if (MEX) {
-      ctx.fillStyle = '#FFFFFF'; ctx.strokeStyle = '#C5CFCB'; ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
-      MEX.forEach(function (s) { s.p.forEach(function (ring) {
-        var xs = ring.map(function (c) { return P({ lat: c[1], lng: c[0] }); });
-        if (xs.every(function (q) { return q.x < -50 || q.x > W + 50; }) || xs.every(function (q) { return q.y < -50 || q.y > H + 50; })) return;
-        ctx.beginPath(); xs.forEach(function (q, i) { if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.closePath(); ctx.fill(); ctx.stroke();
-      }); });
-      ctx.fillStyle = 'rgba(95,109,105,.55)'; ctx.font = '600 ' + Math.round(W / 80) + 'px "Noto Sans", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      MEX.forEach(function (s) {
-        var big = s.p.slice().sort(function (a, b) { return b.length - a.length; })[0]; if (!big) return;
-        var sx = 0, sy = 0; big.forEach(function (c) { sx += c[0]; sy += c[1]; }); var q = P({ lat: sy / big.length, lng: sx / big.length });
-        if (q.x > 40 && q.x < W - 40 && q.y > 30 && q.y < H - 30) ctx.fillText(s.n.toUpperCase(), q.x, q.y);
-      });
-      ctx.textBaseline = 'alphabetic';
-    }
-    // cuadrícula
-    ctx.strokeStyle = 'rgba(30,91,79,.09)'; ctx.lineWidth = 1;
-    for (var gx = 0; gx <= W; gx += W / 12) { ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, H); ctx.stroke(); }
-    for (var gy = 0; gy <= H; gy += H / 8) { ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke(); }
-    var fs = Math.round(W / 62);
-    sched.days.forEach(function (d) {
-      var col = '#' + d.color;
-      var seq = d.points;
-      ctx.strokeStyle = col; ctx.lineWidth = Math.max(3, W / 300); ctx.lineJoin = 'round'; ctx.setLineDash([]);
-      ctx.beginPath(); seq.forEach(function (p, i) { var q = P(p); if (i) ctx.lineTo(q.x, q.y); else ctx.moveTo(q.x, q.y); }); ctx.stroke();
-    });
-    // etiquetas T en el punto medio de cada tramo
-    sched.days.forEach(function (d) {
-      var col = '#' + d.color;
-      d.legs.forEach(function (l) {
-        var a = null, b = null;
-        for (var i = 0; i < d.points.length; i++) { if (d.points[i].name === l.to) b = d.points[i]; }
-        if (b) { for (var j = 0; j < d.points.length; j++) { if (d.points[j] === b) { a = d.points[j - 1]; break; } } }
-        if (!a || !b) return;
-        var pa = P(a), pb = P(b), mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2, t = 'T' + l.n;
-        ctx.font = '700 ' + fs + 'px "Noto Sans", sans-serif'; var tw = ctx.measureText(t).width + fs * 1.1, th = fs * 1.7;
-        ctx.fillStyle = col; roundRect(ctx, mx - tw / 2, my - th / 2, tw, th, 5); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, mx, my + 1);
-      });
-    });
-    // puntos y nombres
-    var seen = {}, labBoxes = [];
-    sched.days.forEach(function (d) {
-      d.points.forEach(function (p) {
-        var key = p.name; if (seen[key]) return; seen[key] = 1;
-        var q = P(p); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#' + d.color; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(q.x, q.y, fs * 0.55, 0, 7); ctx.fill(); ctx.stroke();
-        ctx.font = '600 ' + fs + 'px "Noto Sans", sans-serif'; ctx.textBaseline = 'alphabetic';
-        var lab = p.name.length > 34 ? p.name.slice(0, 33) + '…' : p.name, w = ctx.measureText(lab).width, best = null;
-        var cands = [[1, -0.9], [1, 1.9], [-1, -0.9], [-1, 1.9], [1, -2.6], [1, 3.6], [-1, -2.6], [-1, 3.6]];
-        for (var ci = 0; ci < cands.length && !best; ci++) {
-          var sx = cands[ci][0], lx0 = sx > 0 ? q.x + fs : q.x - fs - w, ly0 = q.y + cands[ci][1] * fs;
-          if (lx0 < 6 || lx0 + w > W - 6 || ly0 - fs < 4 || ly0 > H - 20) continue;
-          var rc = [lx0 - 3, ly0 - fs, w + 6, fs * 1.3], hit = false;
-          for (var bi = 0; bi < labBoxes.length && !hit; bi++) { var o = labBoxes[bi]; hit = rc[0] < o[0] + o[2] && rc[0] + rc[2] > o[0] && rc[1] < o[1] + o[3] && rc[1] + rc[3] > o[1]; }
-          if (!hit) best = { x: lx0, y: ly0, rc: rc };
-        }
-        if (!best) best = { x: q.x + fs, y: q.y - fs * 0.9, rc: [q.x + fs - 3, q.y - fs * 1.9, w + 6, fs * 1.3] };
-        labBoxes.push(best.rc);
-        ctx.textAlign = 'left'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.strokeText(lab, best.x, best.y); ctx.fillStyle = '#1B2724'; ctx.fillText(lab, best.x, best.y);
-      });
-    });
-    ctx.font = '400 ' + Math.round(fs * 0.8) + 'px "Noto Sans", sans-serif'; ctx.fillStyle = '#5F6D69'; ctx.textAlign = 'left';
-    ctx.fillText('Esquema de recorridos sin escala vial', 12, H - 12);
-    return true;
-  }
-  function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
-  var LM = null, LSIG = '';
-  function renderLeaflet(show) {
-    var el = $('#lmap'); if (!el) return false; el.hidden = !show;
-    if (!show || !window.L) { return false; }
-    if (!LM) {
-      var map = L.map(el, { attributionControl: false, preferCanvas: false, zoomSnap: 0.25, minZoom: 3, maxZoom: 16, worldCopyJump: false });
-      LM = { map: map, states: L.layerGroup().addTo(map), days: L.layerGroup().addTo(map), ctl: null, statesDone: false };
-      L.control.scale({ imperial: false, position: 'bottomleft' }).addTo(map);
-      map.setView([23.5, -102], 4.5);
-    }
-    if (MEX && !LM.statesDone) {
-      LM.statesDone = true;
-      MEX.forEach(function (s) { s.p.forEach(function (ring) { L.polygon(ring.map(function (c) { return [c[1], c[0]]; }), { color: '#C5CFCB', weight: 1, fillColor: '#FFFFFF', fillOpacity: 1, interactive: false }).addTo(LM.states); }); });
-    }
-    LM.map.invalidateSize();
-    if (LM.ctl) { LM.map.removeControl(LM.ctl); LM.ctl = null; }
-    LM.days.clearLayers();
-    var overlays = {}, all = [], seen = {};
-    SCHED.days.forEach(function (d) {
-      var g = L.layerGroup(), col = '#' + d.color, pts = d.points.filter(DG.hasCoords);
-      if (pts.length > 1) L.polyline(pts.map(function (p) { return [p.lat, p.lng]; }), { color: col, weight: 4, opacity: .9 }).addTo(g);
-      d.legs.forEach(function (l) {
-        var bi = -1; for (var i = 0; i < d.points.length; i++) if (d.points[i].name === l.to) bi = i;
-        var a = bi > 0 ? d.points[bi - 1] : null, b = bi >= 0 ? d.points[bi] : null;
-        if (!a || !b || !DG.hasCoords(a) || !DG.hasCoords(b)) return;
-        L.marker([(a.lat + b.lat) / 2, (a.lng + b.lng) / 2], { interactive: false, icon: L.divIcon({ className: 'tlab', html: '<span style="background:' + col + '">T' + l.n + '</span>', iconSize: [0, 0] }) }).addTo(g);
-      });
-      pts.forEach(function (p) {
-        all.push([p.lat, p.lng]);
-        var m = L.circleMarker([p.lat, p.lng], { radius: 6, color: col, weight: 3, fillColor: '#fff', fillOpacity: 1 });
-        m.bindTooltip(p.name, { permanent: !seen[p.name] && pts.length <= 9, direction: 'right', offset: [8, 0], className: 'plab' }); seen[p.name] = 1; m.addTo(g);
-      });
-      overlays['<span style="color:' + col + ';font-weight:700">' + esc(d.mapLabel.replace(/:.*$/, '')) + '</span>'] = g; g.addTo(LM.days);
-    });
-    if (SCHED.days.length > 1) LM.ctl = L.control.layers(null, overlays, { collapsed: false, position: 'topright' }).addTo(LM.map);
-    var sig = JSON.stringify(all);
-    if (sig !== LSIG) {
-      LSIG = sig;
-      if (all.length > 1) LM.map.fitBounds(L.latLngBounds(all), { paddingTopLeft: [36, 36], paddingBottomRight: [150, 36], maxZoom: 11 });
-      else if (all.length === 1) LM.map.setView(all[0], 9); else LM.map.setView([23.5, -102], 4.5);
-    }
-    return true;
-  }
   function mapModeOf() { var m = S.mapMode; return m === 'ninguno' || m === 'espacio' ? m : 'captura'; }
   function renderMap() {
     var box = $('#mapBox'); box.innerHTML = '';
@@ -666,7 +542,6 @@
     $('#mapMode').value = mode; box.hidden = mode === 'ninguno'; $('#mapOpts').hidden = mode !== 'captura';
     $('#mapHint').textContent = mode === 'captura' ? 'Abre cada día en Google Maps, ajusta la ruta, toma una captura y pégala aquí (Ctrl+V). Se inserta en el Word con calles y referencias reales. Mientras no cargues una captura, el Word deja un recuadro en blanco con marco. Con el mapa de Mapbox: arrastra con el ratón para moverlo y usa la rueda para acercar o alejar.'
       : mode === 'espacio' ? 'El Word llevará la lista de traslados y un recuadro vacío del tamaño del mapa, listo para pegar o dibujar tu mapa e imprimirlo.' : 'El Word llevará solo la lista de traslados por día.';
-    renderLeaflet(false);
     if (mode === 'espacio') { box.innerHTML = '<div class="mapblank">Recuadro en blanco en el Word para el mapa</div>'; }
     else if (mode === 'ninguno') { /* sin mapa */ }
     else if (UI.mapImg) { var im = document.createElement('img'); im.src = UI.mapImg.url; im.alt = 'Mapa cargado'; box.appendChild(im); }
@@ -970,7 +845,6 @@
   }
 
   function init() {
-    fetch('data/mexico.json').then(function (r) { return r.json(); }).then(function (m) { MEX = m; if (typeof SCHED !== 'undefined' && SCHED) { renderMap(); renderPreview(); } }).catch(function () {});
     Promise.all([fetch('data/catalogo.json').then(function (r) { return r.json(); }), fetch('data/plantilla.json').then(function (r) { return r.json(); })]).then(function (r) {
       CAT = r[0]; TPL = r[1].b64;
       S = load() || exampleState();
