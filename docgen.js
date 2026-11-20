@@ -326,7 +326,7 @@
     });
 
     // Itinerario
-    b += para(run('Itinerario', { b: 1, color: '1E5B4F', sz: 22 }), { sz: 22, pageBreakBefore: 1, spacing: [0, 140], bdrB: 'DCE2DF', bdrSz: 6 });
+    b += para(run('Itinerario', { b: 1, color: '1E5B4F', sz: 22 }), { sz: 22, keepNext: 1, spacing: [320, 140], bdrB: 'DCE2DF', bdrSz: 6 });
     sched.days.forEach(function (d, i) {
       b += para(run(d.label, { b: 1, color: d.color }), { spacing: [i ? 260 : 60, 80], keepNext: 1 });
       b += dayTable(d);
@@ -334,23 +334,23 @@
     b += emptyP(10);
 
     // Mapa
-    b += para(run('Mapa de recorridos', { b: 1, color: '1E5B4F', sz: 22 }), { sz: 22, pageBreakBefore: 1, spacing: [0, 140], bdrB: 'DCE2DF', bdrSz: 6 });
+    b += para(run('Mapa de recorridos', { b: 1, color: '1E5B4F', sz: 22 }), { sz: 22, keepNext: 1, spacing: [320, 140], bdrB: 'DCE2DF', bdrSz: 6 });
     sched.days.forEach(function (d) {
       b += para(run(d.mapLabel, { b: 1, color: d.color, sz: 20 }), { sz: 20, spacing: [100, 40], keepNext: 1 });
       var legs = d.rows.filter(function (r) { return r.kind === 'traslado'; });
       var legInfo = d.legs;
-      if (!legInfo.length) b += para(run('Sin traslados programados.', { sz: 20 }), { sz: 20 });
+      if (!legInfo.length) b += para(run('Sin traslados programados.', { sz: 20 }), { sz: 20, keepNext: 1 });
       legInfo.forEach(function (l) {
         var t = l.from ? l.from + ' – ' + l.to : 'Hacia ' + l.to;
-        b += para(run('T' + l.n + ': ' + t, { sz: 20 }), { sz: 20, spacing: [0, 0] });
+        b += para(run('T' + l.n + ': ' + t, { sz: 20 }), { sz: 20, spacing: [0, 0], keepNext: 1 });
       });
     });
     if (map && map.blank) {
       var bd = ['top', 'left', 'bottom', 'right'].map(function (s) { return '<w:' + s + ' w:val="single" w:sz="6" w:space="0" w:color="A6A6A6"/>'; }).join('');
-      b += emptyP(18) + '<w:tbl><w:tblPr><w:tblW w:w="8838" w:type="dxa"/><w:tblBorders>' + bd + '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="8838"/></w:tblGrid>' +
+      b += para('', { sz: 18, keepNext: 1 }) + '<w:tbl><w:tblPr><w:tblW w:w="8838" w:type="dxa"/><w:tblBorders>' + bd + '</w:tblBorders><w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="8838"/></w:tblGrid>' +
         '<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="6400" w:hRule="exact"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="8838" w:type="dxa"/></w:tcPr>' + emptyP(18) + '</w:tc></w:tr></w:tbl>' + emptyP(2);
     } else if (map && map.png) {
-      b += emptyP(18);
+      b += para('', { sz: 18, keepNext: 1 });
       var cx = 5612130, cy = Math.round(cx * map.h / map.w);
       var maxCy = 4300000; if (cy > maxCy) { cx = Math.round(cx * maxCy / cy); cy = maxCy; }
       b += para(drawing('rId100', cx, cy, 501, 'Mapa de recorridos'), { sz: 18 });
